@@ -1,0 +1,5 @@
+{
+  "name": "AGSE Red Tag Generator",
+  "description": "A professional tool for searching NCMR records and generating print-ready 4x6 Red Tag PDFs for shop floor quality control.",
+  "requestFramePermissions": []
+}
