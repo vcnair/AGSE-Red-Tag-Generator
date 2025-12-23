@@ -10,9 +10,8 @@ export class DataService {
   setAdapter(type: DataAdapterType) {
     this.adapter = type;
     
-    // If switching to LIVE mode, stop auto-refresh first
-    if (type === 'LIVE') {
-      // Auto-refresh will be controlled by the component
+    // Stop auto-refresh when switching away from LIVE mode
+    if (type !== 'LIVE') {
       liveDataService.stopAutoRefresh();
     }
   }

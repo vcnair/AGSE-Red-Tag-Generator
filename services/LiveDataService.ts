@@ -75,29 +75,35 @@ export class LiveDataService {
       const csvText = await response.text();
       
       // Parse CSV with PapaParse
-      const parseResult = await new Promise<Papa.ParseResult<NCRRecord>>((resolve, reject) => {
-        Papa.parse<NCRRecord>(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          transformHeader: (header: string) => {
-            // Trim whitespace from headers for flexible matching
-            return header.trim();
-          },
-          complete: (results) => resolve(results),
-          error: (error) => reject(error)
-        });
+      Papa.parse<NCRRecord>(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => {
+          // Trim whitespace from headers for flexible matching
+          return header.trim();
+        },
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            console.warn('CSV parsing warnings:', results.errors);
+          }
+
+          this.data = this.normalizeRecords(results.data);
+          this.status.lastSyncTime = new Date();
+          this.status.recordCount = this.data.length;
+          this.status.error = null;
+          
+          console.log(`[LiveDataService] Successfully loaded ${this.data.length} records`);
+          this.status.isLoading = false;
+          this.notifyStatusChange();
+        },
+        error: (error) => {
+          const errorMessage = error instanceof Error ? error.message : 'CSV parsing error';
+          this.status.error = errorMessage;
+          console.error('[LiveDataService] Failed to parse CSV:', error);
+          this.status.isLoading = false;
+          this.notifyStatusChange();
+        }
       });
-
-      if (parseResult.errors.length > 0) {
-        console.warn('CSV parsing warnings:', parseResult.errors);
-      }
-
-      this.data = this.normalizeRecords(parseResult.data);
-      this.status.lastSyncTime = new Date();
-      this.status.recordCount = this.data.length;
-      this.status.error = null;
-      
-      console.log(`[LiveDataService] Successfully loaded ${this.data.length} records`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       this.status.error = errorMessage;
@@ -212,10 +218,10 @@ export class LiveDataService {
     
     console.log(`[LiveDataService] Starting auto-refresh every ${this.config.autoRefreshInterval / 1000}s`);
     
-    this.refreshTimer = window.setInterval(() => {
+    this.refreshTimer = setInterval(() => {
       console.log('[LiveDataService] Auto-refresh triggered');
       this.fetchData();
-    }, this.config.autoRefreshInterval);
+    }, this.config.autoRefreshInterval) as unknown as number;
   }
 
   /**
