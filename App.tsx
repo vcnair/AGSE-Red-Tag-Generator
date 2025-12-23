@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, History, FileText, Download, AlertCircle, Loader2, CheckCircle2, Upload, Table, ShieldCheck, ClipboardCheck } from 'lucide-react';
+import { Search, History, FileText, Download, AlertCircle, Loader2, CheckCircle2, Upload, Table, ShieldCheck, ClipboardCheck, Wifi, RefreshCw, WifiOff } from 'lucide-react';
 import Papa from 'papaparse';
 import { NCRRecord, RecentSearch } from './types';
 import { dataService } from './services/DataService';
 import { generateRedTag } from './services/PDFGenerator';
+import { LiveDataStatus } from './services/LiveDataService';
 
 const App: React.FC = () => {
   const [ncmrInput, setNcmrInput] = useState('');
@@ -13,6 +14,13 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentSearch[]>([]);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<LiveDataStatus>({
+    isLoading: false,
+    lastSyncTime: null,
+    recordCount: 0,
+    error: null
+  });
   const [dataSourceInfo, setDataSourceInfo] = useState({ 
     isCustom: false, 
     count: dataService.getRecordCount() 
@@ -26,6 +34,81 @@ const App: React.FC = () => {
       setRecent(JSON.parse(saved));
     }
   }, []);
+
+  // Subscribe to live data status changes
+  useEffect(() => {
+    const liveDataService = dataService.getLiveDataService();
+    const unsubscribe = liveDataService.onStatusChange((status) => {
+      setLiveStatus(status);
+      if (isLiveMode) {
+        setDataSourceInfo({
+          isCustom: true,
+          count: status.recordCount
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isLiveMode]);
+
+  // Handle LIVE mode toggle
+  const handleLiveModeToggle = async () => {
+    const newLiveMode = !isLiveMode;
+    setIsLiveMode(newLiveMode);
+    setError(null);
+
+    if (newLiveMode) {
+      // Enable LIVE mode
+      dataService.setAdapter('LIVE');
+      const liveDataService = dataService.getLiveDataService();
+      
+      setLiveStatus({ ...liveStatus, isLoading: true });
+      
+      try {
+        // Initial fetch
+        await liveDataService.fetchData();
+        const status = liveDataService.getStatus();
+        
+        if (status.error) {
+          setError(`Live Mode Error: ${status.error}. Falling back to LOCAL mode.`);
+          setIsLiveMode(false);
+          dataService.setAdapter('LOCAL');
+        } else {
+          // Start auto-refresh
+          liveDataService.startAutoRefresh();
+          setDataSourceInfo({
+            isCustom: true,
+            count: status.recordCount
+          });
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to enable LIVE mode';
+        setError(errorMsg);
+        setIsLiveMode(false);
+        dataService.setAdapter('LOCAL');
+      }
+    } else {
+      // Disable LIVE mode
+      dataService.setAdapter('LOCAL');
+      const liveDataService = dataService.getLiveDataService();
+      liveDataService.stopAutoRefresh();
+      
+      setDataSourceInfo({
+        isCustom: dataService.isUsingCustomData(),
+        count: dataService.getRecordCount()
+      });
+    }
+  };
+
+  // Manual refresh for LIVE mode
+  const handleManualRefresh = async () => {
+    if (!isLiveMode) return;
+    
+    const liveDataService = dataService.getLiveDataService();
+    await liveDataService.fetchData();
+  };
 
   const saveRecent = (ncmr: string) => {
     const newSearch: RecentSearch = { ncmr, timestamp: Date.now() };
@@ -114,9 +197,29 @@ const App: React.FC = () => {
                <Table className="w-3.5 h-3.5" />
                {dataSourceInfo.count} NCR Records
              </div>
-             <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full">
-               <ShieldCheck className="w-3.5 h-3.5" />
-               {dataSourceInfo.isCustom ? 'Active Data: Master Log' : 'Demo Environment'}
+             <div className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border ${
+               isLiveMode 
+                 ? 'text-green-600 bg-green-50 border-green-200' 
+                 : dataSourceInfo.isCustom
+                   ? 'text-blue-600 bg-blue-50 border-blue-100'
+                   : 'text-slate-500 bg-slate-100 border-slate-200'
+             }`}>
+               {isLiveMode ? (
+                 <>
+                   <Wifi className="w-3.5 h-3.5" />
+                   <span>LIVE MODE</span>
+                   {liveStatus.lastSyncTime && (
+                     <span className="text-[10px] opacity-70">
+                       {new Date(liveStatus.lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                     </span>
+                   )}
+                 </>
+               ) : (
+                 <>
+                   <ShieldCheck className="w-3.5 h-3.5" />
+                   {dataSourceInfo.isCustom ? 'Active Data: Master Log' : 'Demo Environment'}
+                 </>
+               )}
              </div>
           </div>
         </div>
@@ -130,14 +233,60 @@ const App: React.FC = () => {
               <Upload className="w-4 h-4 text-slate-400" />
               1. Import Log
             </h2>
+            
+            {/* LIVE Mode Toggle */}
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl hover:bg-slate-100 hover:border-slate-300 transition-all group"
+              onClick={handleLiveModeToggle}
+              disabled={liveStatus.isLoading}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl mb-3 transition-all font-medium text-sm ${
+                isLiveMode
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-slate-50 border-2 border-dashed border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              <Upload className="w-4 h-4 text-slate-400 group-hover:text-red-500" />
-              <span className="text-sm font-medium text-slate-600">Sync Master CSV</span>
+              {liveStatus.isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Connecting...</span>
+                </>
+              ) : isLiveMode ? (
+                <>
+                  <Wifi className="w-4 h-4" />
+                  <span>LIVE MODE Active</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-4 h-4" />
+                  <span>Enable Live Mode</span>
+                </>
+              )}
             </button>
-            <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+            
+            {/* Manual Refresh Button (only show when in LIVE mode) */}
+            {isLiveMode && (
+              <button
+                onClick={handleManualRefresh}
+                disabled={liveStatus.isLoading}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-xs font-medium text-slate-600 mb-3 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${liveStatus.isLoading ? 'animate-spin' : ''}`} />
+                <span>Refresh Now</span>
+              </button>
+            )}
+            
+            {/* CSV Upload (only show when NOT in LIVE mode) */}
+            {!isLiveMode && (
+              <>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl hover:bg-slate-100 hover:border-slate-300 transition-all group"
+                >
+                  <Upload className="w-4 h-4 text-slate-400 group-hover:text-red-500" />
+                  <span className="text-sm font-medium text-slate-600">Sync Master CSV</span>
+                </button>
+                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+              </>
+            )}
           </section>
 
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">

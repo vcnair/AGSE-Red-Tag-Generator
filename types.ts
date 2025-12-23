@@ -26,7 +26,7 @@ export interface NCRRecord {
   "Date Closed": string;
 }
 
-export type DataAdapterType = 'LOCAL' | 'SHAREPOINT';
+export type DataAdapterType = 'LOCAL' | 'SHAREPOINT' | 'LIVE';
 
 export interface RecentSearch {
   ncmr: string;

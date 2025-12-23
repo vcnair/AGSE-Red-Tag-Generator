@@ -1,6 +1,7 @@
 
 import { NCRRecord, DataAdapterType } from '../types';
 import { SAMPLE_DATA } from '../constants';
+import { liveDataService } from './LiveDataService';
 
 export class DataService {
   private adapter: DataAdapterType = 'LOCAL';
@@ -8,6 +9,16 @@ export class DataService {
 
   setAdapter(type: DataAdapterType) {
     this.adapter = type;
+    
+    // If switching to LIVE mode, stop auto-refresh first
+    if (type === 'LIVE') {
+      // Auto-refresh will be controlled by the component
+      liveDataService.stopAutoRefresh();
+    }
+  }
+
+  getAdapter(): DataAdapterType {
+    return this.adapter;
   }
 
   /**
@@ -22,6 +33,13 @@ export class DataService {
    * This handles cases where Excel might have stripped leading zeros.
    */
   async findRecord(ncmr: string): Promise<NCRRecord | null> {
+    // Handle LIVE adapter mode
+    if (this.adapter === 'LIVE') {
+      // Small artificial delay for UX feedback
+      await new Promise(resolve => setTimeout(resolve, 300));
+      return liveDataService.findRecord(ncmr);
+    }
+    
     if (this.adapter === 'LOCAL') {
       // Small artificial delay for UX feedback
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -65,11 +83,21 @@ export class DataService {
   }
 
   getRecordCount(): number {
+    if (this.adapter === 'LIVE') {
+      return liveDataService.getStatus().recordCount;
+    }
     return (this.customData || SAMPLE_DATA).length;
   }
 
   isUsingCustomData(): boolean {
-    return this.customData !== null;
+    return this.customData !== null || this.adapter === 'LIVE';
+  }
+
+  /**
+   * Get live data service instance for direct access
+   */
+  getLiveDataService() {
+    return liveDataService;
   }
 }
 
