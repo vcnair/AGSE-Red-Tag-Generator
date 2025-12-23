@@ -54,13 +54,13 @@ export class DataService {
       const response = await fetch(this.csvConfig.csvPath);
       
       if (!response.ok) {
-        console.warn(`[DataService] Failed to load CSV: ${response.status}. Using fallback sample data.`);
+        console.warn(`[DataService] Failed to load CSV: ${response.status} ${response.statusText}. Using fallback sample data.`);
         return;
       }
 
       const csvText = await response.text();
       
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         Papa.parse<NCRRecord>(csvText, {
           header: true,
           skipEmptyLines: true,
@@ -78,6 +78,7 @@ export class DataService {
           },
           error: (error) => {
             console.warn('[DataService] CSV parse error, using fallback sample data:', error);
+            // Resolve instead of reject to allow app to continue with fallback data
             resolve();
           }
         });
@@ -91,6 +92,10 @@ export class DataService {
    * Normalize records to handle column name variations and ensure consistent data
    */
   private normalizeRecords(records: any[]): NCRRecord[] {
+    if (records.length === 0) {
+      return [];
+    }
+
     const expectedKeys: (keyof NCRRecord)[] = [
       'NCMR',
       'DATE',
@@ -118,16 +123,26 @@ export class DataService {
       'Date Closed'
     ];
 
+    // Build key mapping once using the first record's keys
+    const sampleRecordKeys = Object.keys(records[0]);
+    const keyMapping = new Map<string, string>();
+    
+    for (const expectedKey of expectedKeys) {
+      const lowerExpected = expectedKey.toLowerCase().trim();
+      const matchingKey = sampleRecordKeys.find(key => 
+        key.toLowerCase().trim() === lowerExpected
+      );
+      if (matchingKey) {
+        keyMapping.set(expectedKey, matchingKey);
+      }
+    }
+
     return records.map(record => {
       const normalized: any = {};
       
       for (const expectedKey of expectedKeys) {
-        const lowerExpected = expectedKey.toLowerCase().trim();
-        const matchingKey = Object.keys(record).find(key => 
-          key.toLowerCase().trim() === lowerExpected
-        );
-        
-        normalized[expectedKey] = matchingKey ? record[matchingKey] : '';
+        const actualKey = keyMapping.get(expectedKey);
+        normalized[expectedKey] = actualKey ? record[actualKey] : '';
       }
 
       return normalized as NCRRecord;
