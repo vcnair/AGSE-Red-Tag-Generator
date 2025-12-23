@@ -422,7 +422,7 @@ The CSV file must contain these columns (exact names, case-sensitive):
 
 ```csv
 NCMR,DATE,Date NC was Flagged,Time NC was Flagged,Priority Status,Discovery Area,Part No.,Part Description,QTY of Defected Parts,Purchase Order No.,Source Simplified,Source,Job No. or GL No.,Type of Defect,Issuing Inspector Stamp No.,Disposition,Containment Required? (Y/N),Containment Completed?,RTV Status,Scrap Cost,Rework WOR No.,Actions / Comments,Date Dispositioned in Global Shop,Date Closed
-0014962,8/27/2025,8/27/2025,7:30:00 AM,Standard,Subassembly,AM-2079-1400,MOUNTING PLATE,8,118650,Internal,AGSE Manufacturing,1220,Dimensional,110,RWK,N,N/A,N/A,$0,R15183,Released to Stores,8/28/2025,8/29/2025
+0014962,12/15/2024,12/15/2024,7:30:00 AM,Standard,Subassembly,AM-2079-1400,MOUNTING PLATE,8,118650,Internal,AGSE Manufacturing,1220,Dimensional,110,RWK,N,N/A,N/A,$0,R15183,Released to Stores,12/16/2024,12/17/2024
 0013815,10/17/2024,10/17/2024,9:15:00 AM,Standard,Receiving Inspection,11C3323P06,THREADED ROD,50,125489,Vendor,Acme Fasteners,1145,Thread Damage,105,RWK,Y,Yes,N/A,$0,R15001,Vendor rework required,10/18/2024,10/25/2024
 ```
 
@@ -902,7 +902,7 @@ We welcome feedback on:
 
 **Current Version**: v1.3.0  
 **Document Version**: 1.0  
-**Last Updated**: December 23, 2025  
+**Last Updated**: December 2024  
 **Maintained By**: AGSE Quality Operations Team
 
 ---
