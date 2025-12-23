@@ -245,6 +245,20 @@ export class DataService {
   }
 
   /**
+   * Get all records from the current data source.
+   * Useful for displaying a table view of all NCR records.
+   */
+  async getAllRecords(): Promise<NCRRecord[]> {
+    await this.initialize();
+    
+    if (this.adapter === 'LIVE') {
+      return liveDataService.getData();
+    }
+    
+    return this.customData || SAMPLE_DATA;
+  }
+
+  /**
    * Get the count of records asynchronously, ensuring data is loaded first.
    */
   async getRecordCountAsync(): Promise<number> {

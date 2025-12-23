@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, History, FileText, Download, AlertCircle, Loader2, CheckCircle2, Upload, Table, ShieldCheck, ClipboardCheck, Wifi, RefreshCw, WifiOff } from 'lucide-react';
+import { Search, History, FileText, Download, AlertCircle, Loader2, CheckCircle2, Upload, Table, ShieldCheck, ClipboardCheck, Wifi, RefreshCw, WifiOff, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Papa from 'papaparse';
 import { NCRRecord, RecentSearch } from './types';
 import { dataService } from './services/DataService';
@@ -16,6 +16,11 @@ const App: React.FC = () => {
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [allRecords, setAllRecords] = useState<NCRRecord[]>([]);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [tableFilter, setTableFilter] = useState('');
+  const [tablePage, setTablePage] = useState(0);
   const [liveStatus, setLiveStatus] = useState<LiveDataStatus>({
     isLoading: false,
     lastSyncTime: null,
@@ -28,6 +33,7 @@ const App: React.FC = () => {
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const RECORDS_PER_PAGE = 20;
 
   // Initialize data service on app startup - auto-load CSV to simulate reality
   useEffect(() => {
@@ -141,9 +147,61 @@ const App: React.FC = () => {
     localStorage.setItem('agse_recent_searches', JSON.stringify(updated));
   };
 
+  // Open table modal to browse all NCR records
+  const handleOpenTableModal = async () => {
+    setTableLoading(true);
+    setShowTableModal(true);
+    setTableFilter('');
+    setTablePage(0);
+    
+    try {
+      const records = await dataService.getAllRecords();
+      setAllRecords(records);
+    } catch (err) {
+      console.error('Failed to load records:', err);
+      setAllRecords([]);
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  // Select a record from the table
+  const handleSelectFromTable = (selectedRecord: NCRRecord) => {
+    setRecord(selectedRecord);
+    setNcmrInput(selectedRecord.NCMR);
+    saveRecent(selectedRecord.NCMR);
+    setShowTableModal(false);
+    setError(null);
+  };
+
+  // Filter records in the table
+  const filteredRecords = allRecords.filter(r => {
+    if (!tableFilter.trim()) return true;
+    const search = tableFilter.toLowerCase();
+    return (
+      r.NCMR?.toLowerCase().includes(search) ||
+      r['Part No.']?.toLowerCase().includes(search) ||
+      r['Part Description']?.toLowerCase().includes(search) ||
+      r['Discovery Area']?.toLowerCase().includes(search) ||
+      r.Disposition?.toLowerCase().includes(search)
+    );
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredRecords.length / RECORDS_PER_PAGE);
+  const paginatedRecords = filteredRecords.slice(
+    tablePage * RECORDS_PER_PAGE,
+    (tablePage + 1) * RECORDS_PER_PAGE
+  );
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!ncmrInput.trim()) return;
+    
+    // If input is empty, open the table modal instead
+    if (!ncmrInput.trim()) {
+      handleOpenTableModal();
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -481,6 +539,131 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Table Modal for browsing NCR records */}
+      {showTableModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Table className="w-5 h-5 text-red-600" />
+                  Browse NCR Records
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  {filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''} found
+                </p>
+              </div>
+              <button
+                onClick={() => setShowTableModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Search/Filter */}
+            <div className="p-4 border-b border-slate-100">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter by NCMR, Part No., Description, Area, or Disposition..."
+                  value={tableFilter}
+                  onChange={(e) => { setTableFilter(e.target.value); setTablePage(0); }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 overflow-auto">
+              {tableLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">NCMR</th>
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Part No.</th>
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Description</th>
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Area</th>
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                          No records found matching your filter
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedRecords.map((r, idx) => (
+                        <tr
+                          key={`${r.NCMR}-${idx}`}
+                          onClick={() => handleSelectFromTable(r)}
+                          className="hover:bg-red-50 cursor-pointer transition-colors group"
+                        >
+                          <td className="px-4 py-3">
+                            <span className="font-mono font-bold text-red-600 group-hover:underline">{r.NCMR}</span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{r.DATE || r['Date NC was Flagged'] || '--'}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-slate-800">{r['Part No.'] || '--'}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600 hidden md:table-cell max-w-[200px] truncate">{r['Part Description'] || '--'}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600 hidden sm:table-cell">{r['Discovery Area'] || '--'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              r.Disposition === 'RWK' ? 'bg-yellow-100 text-yellow-800' :
+                              r.Disposition === 'Scrap' ? 'bg-red-100 text-red-800' :
+                              r.Disposition === 'Mixed' ? 'bg-purple-100 text-purple-800' :
+                              'bg-slate-100 text-slate-600'
+                            }`}>
+                              {r.Disposition || 'Pending'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 border-t border-slate-200 bg-slate-50">
+                <p className="text-xs text-slate-500">
+                  Showing {tablePage * RECORDS_PER_PAGE + 1} - {Math.min((tablePage + 1) * RECORDS_PER_PAGE, filteredRecords.length)} of {filteredRecords.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setTablePage(p => Math.max(0, p - 1))}
+                    disabled={tablePage === 0}
+                    className="p-2 hover:bg-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm font-medium text-slate-600">
+                    Page {tablePage + 1} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setTablePage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={tablePage >= totalPages - 1}
+                    className="p-2 hover:bg-white rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <footer className="max-w-5xl mx-auto px-6 pb-16 pt-8 text-center">
         <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em]">
