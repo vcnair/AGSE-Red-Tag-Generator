@@ -23,7 +23,7 @@ export const generateRedTag = async (record: NCRRecord) => {
 
   // --- 1. HEADER SECTION (HIGH VISIBILITY) ---
   doc.setFillColor(220, 38, 38); // Strong industrial red
-  doc.rect(0, 0, width, 75, 'F');
+  doc.rect(0, 0, width, 80, 'F');
 
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
@@ -40,17 +40,35 @@ export const generateRedTag = async (record: NCRRecord) => {
 
   // --- 2. PRIMARY TRACKING SECTION ---
   doc.setTextColor(0, 0, 0);
-  let y = 95;
+  let y = 100;
   
-  // NCMR Number
-  doc.setFontSize(8);
+  // NCMR Number (Left side, more compact)
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
-  doc.text('NCMR NUMBER:', margin, y - 5);
-  doc.setFontSize(22);
+  doc.text('NCMR NUMBER:', margin, y);
+  doc.setFontSize(18);
   doc.setFont('courier', 'bold');
-  doc.text(record.NCMR || 'UNKNOWN', margin, y + 15);
+  doc.text(record.NCMR || 'UNKNOWN', margin, y + 18);
   
-  // Priority Indicator
+  // Part Number (Center-left, below NCMR label)
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PART NUMBER:', margin, y + 30);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  const partNoText = doc.splitTextToSize(record['Part No.'] || 'N/A', 100);
+  doc.text(partNoText, margin, y + 42);
+  
+  // Disposition (Right side, aligned with Part Number)
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DISPOSITION:', width / 2 + 5, y + 30);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  const dispositionText = doc.splitTextToSize(record.Disposition || 'N/A', 100);
+  doc.text(dispositionText, width / 2 + 5, y + 42);
+  
+  // Priority Indicator (Top right corner)
   const isUrgent = record['Priority Status']?.toLowerCase() === 'urgent';
   if (isUrgent) {
     doc.setFillColor(0, 0, 0);
@@ -61,16 +79,16 @@ export const generateRedTag = async (record: NCRRecord) => {
     doc.text('URGENT', width - 43.5, y + 8, { align: 'center' });
     doc.setTextColor(0, 0, 0);
   } else {
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(record['Priority Status'] || 'Standard', width - margin, y + 10, { align: 'right' });
+    doc.text(record['Priority Status'] || 'Standard', width - margin, y + 5, { align: 'right' });
   }
 
-  y += 35;
+  y += 60;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(1.5);
   doc.line(margin, y, width - margin, y);
-  y += 15;
+  y += 18;
 
   // --- 3. CORE ATTRIBUTES ---
   const drawRow = (label1: string, val1: string, label2: string, val2: string, currentY: number) => {
@@ -83,12 +101,22 @@ export const generateRedTag = async (record: NCRRecord) => {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
-    doc.text(String(val1 || 'N/A'), margin, currentY + 11);
-    doc.text(String(val2 || 'N/A'), width / 2 + 5, currentY + 11);
-    return currentY + 24;
+    
+    // Text wrapping for both columns
+    const col1Width = (width / 2) - margin - 10;
+    const col2Width = (width / 2) - margin - 10;
+    const val1Lines = doc.splitTextToSize(String(val1 || 'N/A'), col1Width);
+    const val2Lines = doc.splitTextToSize(String(val2 || 'N/A'), col2Width);
+    
+    doc.text(val1Lines, margin, currentY + 11);
+    doc.text(val2Lines, width / 2 + 5, currentY + 11);
+    
+    // Calculate height based on max lines
+    const maxLines = Math.max(val1Lines.length, val2Lines.length);
+    return currentY + 11 + (maxLines * 10) + 8;
   };
 
-  y = drawRow('Part Number', record['Part No.'], 'Qty Defected', record['QTY of Defected Parts'], y);
+  y = drawRow('Qty Defected', record['QTY of Defected Parts'], 'Discovery Area', record['Discovery Area'], y);
   
   // Description block
   doc.setFontSize(7);
@@ -100,13 +128,13 @@ export const generateRedTag = async (record: NCRRecord) => {
   doc.setTextColor(0, 0, 0);
   const descLines = doc.splitTextToSize(record['Part Description'] || 'N/A', contentWidth);
   doc.text(descLines, margin, y + 10);
-  y += (descLines.length * 10) + 5;
+  y += (descLines.length * 10) + 10;
 
-  y = drawRow('Discovery Area', record['Discovery Area'], 'Defect Type', record['Type of Defect'], y);
-  y = drawRow('PO Number', record['Purchase Order No.'], 'Job / GL No', record['Job No. or GL No.'], y);
-  y = drawRow('Inspector Stamp', record['Issuing Inspector Stamp No.'], 'Date Flagged', record['Date NC was Flagged'], y);
+  y = drawRow('Defect Type', record['Type of Defect'], 'PO Number', record['Purchase Order No.'], y);
+  y = drawRow('Job / GL No', record['Job No. or GL No.'], 'Inspector Stamp', record['Issuing Inspector Stamp No.'], y);
+  y = drawRow('Date Flagged', record['Date NC was Flagged'], '', '', y);
 
-  y += 5;
+  y += 8;
   doc.setLineWidth(0.5);
   doc.line(margin, y, width - margin, y);
   y += 15;
@@ -116,23 +144,24 @@ export const generateRedTag = async (record: NCRRecord) => {
   doc.setFont('helvetica', 'bold');
   doc.text('FINAL DISPOSITION:', margin, y);
   
-  y += 12;
+  y += 15;
   const dispoTypes = ['RWK', 'Scrap', 'Use As Is', 'RTV-MRB', 'Mixed'];
   let currentX = margin;
+  const spacing = (contentWidth / 5);
   dispoTypes.forEach((type) => {
     const isSelected = record.Disposition === type;
     if (isSelected) {
       doc.setFillColor(220, 220, 220);
-      doc.rect(currentX - 2, y - 8, doc.getTextWidth(type) + 4, 12, 'F');
+      doc.rect(currentX - 2, y - 9, doc.getTextWidth(type) + 4, 13, 'F');
       doc.setFont('helvetica', 'bold');
     } else {
       doc.setFont('helvetica', 'normal');
     }
     doc.text(type, currentX, y);
-    currentX += (contentWidth / 5);
+    currentX += spacing;
   });
 
-  y += 20;
+  y += 18;
   y = drawRow('Rework WOR', record['Rework WOR No.'], 'Containment', `${record['Containment Required? (Y/N)'] || 'N'}/${record['Containment Completed?'] || 'N'}`, y);
   
   if (record['RTV Status'] || record['Scrap Cost']) {
@@ -147,7 +176,7 @@ export const generateRedTag = async (record: NCRRecord) => {
   doc.setFontSize(8);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(0, 0, 0);
-  const commentLines = doc.splitTextToSize(record['Actions / Comments'] || 'None listed.', contentWidth);
+  const commentLines = doc.splitTextToSize(record['Actions / Comments'] || 'None listed.', contentWidth - 85);
   doc.text(commentLines, margin, y + 10);
 
   // --- 5. FOOTER & COMPLIANCE ---
@@ -160,7 +189,7 @@ export const generateRedTag = async (record: NCRRecord) => {
   try {
     const qrData = `AGSE-VERIFY:NCMR-${record.NCMR}|TS:${Date.now()}`;
     const qrBase64 = await QRCode.toDataURL(qrData, { margin: 1 });
-    doc.addImage(qrBase64, 'PNG', width - 85, height - 85, 75, 75);
+    doc.addImage(qrBase64, 'PNG', width - 82, height - 82, 70, 70);
   } catch (err) {
     console.error('QR failed', err);
   }
