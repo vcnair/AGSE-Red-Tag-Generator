@@ -91,31 +91,41 @@ export const generateRedTag = async (record: NCRRecord) => {
   y += 18;
 
   // --- 3. CORE ATTRIBUTES ---
+  // Constants for row rendering
+  const COLUMN_PADDING = 10;
+  const LINE_HEIGHT = 10;
+  const BASE_OFFSET = 11;
+  const BOTTOM_PADDING = 8;
+  
   const drawRow = (label1: string, val1: string, label2: string, val2: string, currentY: number) => {
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(80, 80, 80);
     doc.text(label1.toUpperCase(), margin, currentY);
-    doc.text(label2.toUpperCase(), width / 2 + 5, currentY);
+    if (label2) {
+      doc.text(label2.toUpperCase(), width / 2 + 5, currentY);
+    }
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
     
     // Text wrapping for both columns
-    const col1Width = (width / 2) - margin - 10;
-    const col2Width = (width / 2) - margin - 10;
-    const val1Lines = doc.splitTextToSize(String(val1 || 'N/A'), col1Width);
-    const val2Lines = doc.splitTextToSize(String(val2 || 'N/A'), col2Width);
+    const columnWidth = (width / 2) - margin - COLUMN_PADDING;
+    const val1Lines = doc.splitTextToSize(String(val1 || 'N/A'), columnWidth);
+    const val2Lines = val2 ? doc.splitTextToSize(String(val2 || 'N/A'), columnWidth) : [];
     
-    doc.text(val1Lines, margin, currentY + 11);
-    doc.text(val2Lines, width / 2 + 5, currentY + 11);
+    doc.text(val1Lines, margin, currentY + BASE_OFFSET);
+    if (val2Lines.length > 0) {
+      doc.text(val2Lines, width / 2 + 5, currentY + BASE_OFFSET);
+    }
     
     // Calculate height based on max lines
     const maxLines = Math.max(val1Lines.length, val2Lines.length);
-    return currentY + 11 + (maxLines * 10) + 8;
+    return currentY + BASE_OFFSET + (maxLines * LINE_HEIGHT) + BOTTOM_PADDING;
   };
 
+  // Note: Part Number was moved to the header section for better visibility
   y = drawRow('Qty Defected', record['QTY of Defected Parts'], 'Discovery Area', record['Discovery Area'], y);
   
   // Description block
