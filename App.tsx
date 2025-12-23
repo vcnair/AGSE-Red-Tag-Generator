@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [recent, setRecent] = useState<RecentSearch[]>([]);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [isLiveMode, setIsLiveMode] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [liveStatus, setLiveStatus] = useState<LiveDataStatus>({
     isLoading: false,
     lastSyncTime: null,
@@ -23,10 +24,33 @@ const App: React.FC = () => {
   });
   const [dataSourceInfo, setDataSourceInfo] = useState({ 
     isCustom: false, 
-    count: dataService.getRecordCount() 
+    count: 0 
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize data service on app startup - auto-load CSV to simulate reality
+  useEffect(() => {
+    const initializeData = async () => {
+      setIsInitializing(true);
+      try {
+        await dataService.initialize();
+        const count = dataService.getRecordCount();
+        const isCustom = dataService.isUsingCustomData();
+        setDataSourceInfo({ 
+          isCustom, 
+          count 
+        });
+        console.log(`[App] Data initialized: ${count} records, isCustom: ${isCustom}`);
+      } catch (err) {
+        console.error('[App] Failed to initialize data:', err);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    
+    initializeData();
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('agse_recent_searches');
@@ -195,7 +219,14 @@ const App: React.FC = () => {
           <div className="hidden sm:flex items-center gap-4">
              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
                <Table className="w-3.5 h-3.5" />
-               {dataSourceInfo.count} NCR Records
+               {isInitializing ? (
+                 <span className="flex items-center gap-1">
+                   <Loader2 className="w-3 h-3 animate-spin" />
+                   Loading...
+                 </span>
+               ) : (
+                 <span>{dataSourceInfo.count} NCR Records</span>
+               )}
              </div>
              <div className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border ${
                isLiveMode 
@@ -217,7 +248,7 @@ const App: React.FC = () => {
                ) : (
                  <>
                    <ShieldCheck className="w-3.5 h-3.5" />
-                   {dataSourceInfo.isCustom ? 'Active Data: Master Log' : 'Demo Environment'}
+                   {dataSourceInfo.isCustom ? 'Active Data: CSV Auto-loaded' : 'Demo Environment'}
                  </>
                )}
              </div>
